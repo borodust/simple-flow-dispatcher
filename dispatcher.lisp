@@ -49,6 +49,7 @@
 (defclass simple-dispatcher ()
   ((tasks :initform (make-instance 'tagged-queue))
    (error-handler :initform nil :initarg :error-handler)
+   (invoker :initform (error ":invoker missing") :initarg :invoker)
    pool))
 
 
@@ -59,7 +60,7 @@
 
 
 (defun dispatch-with (dispatcher fn invariant)
-  (with-slots (pool tasks error-handler) dispatcher
+  (with-slots (pool tasks error-handler invoker) dispatcher
     (prog1 nil
       (labels ((handle-task (task)
                  (handler-bind ((simple-error (lambda (e)
@@ -69,7 +70,7 @@
                                                     (t ())))
                                                 (return-from handle-task))))
                    (let ((*dispatcher* dispatcher))
-                     (funcall task))))
+                     (funcall invoker task))))
                (handle-tasks ()
                  (loop for task = (peek-task tasks invariant)
                     while task
@@ -80,7 +81,11 @@
           (mt:push-to-pool pool #'handle-tasks))))))
 
 
-(defun make-simple-dispatcher (&key (threads 2) error-handler)
+(defun invoke-directly (fn)
+  (funcall fn))
+
+
+(defun make-simple-dispatcher (&key (threads 2) error-handler (invoker #'invoke-directly))
   "Makes simple thread-safe cl-flow dispatcher that can handle single invariants. For invariants
 to be considered the same they must be EQ. For example:
 
@@ -91,7 +96,8 @@ While this flow block is running other blocks with the same invariant (EQ to :gu
 never be executed concurrently."
   (let ((dispatcher (make-instance 'simple-dispatcher
                                    :threads threads
-                                   :error-handler error-handler)))
+                                   :error-handler error-handler
+                                   :invoker invoker)))
     (lambda (fn invariant &key &allow-other-keys)
       (dispatch-with dispatcher fn invariant))))
 
