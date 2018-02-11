@@ -59,9 +59,9 @@
     (mt:open-pool pool)))
 
 
-(defun dispatch-with (dispatcher fn invariant)
+(defun dispatch-with (dispatcher fn invariant priority ignore-invariant)
   (with-slots (pool tasks error-handler invoker) dispatcher
-    (prog1 nil
+    (prog1 (values)
       (labels ((handle-task (task)
                  (handler-bind ((simple-error (lambda (e)
                                                 (when error-handler
@@ -77,8 +77,10 @@
                     do (progn
                          (handle-task task)
                          (pop-task tasks invariant)))))
-        (unless (push-task tasks invariant fn)
-          (mt:push-to-pool pool #'handle-tasks))))))
+        (if ignore-invariant
+            (mt:push-to-pool pool fn priority)
+            (unless (push-task tasks invariant fn)
+              (mt:push-to-pool pool #'handle-tasks priority)))))))
 
 
 (defun invoke-directly (fn)
@@ -89,7 +91,7 @@
   "Makes simple thread-safe cl-flow dispatcher that can handle single invariants. For invariants
 to be considered the same they must be EQ. For example:
 
-(-> :guarded ()
+\(-> :guarded ()
   (do-some-work))
 
 While this flow block is running other blocks with the same invariant (EQ to :guarded) will
@@ -98,8 +100,14 @@ never be executed concurrently."
                                    :threads threads
                                    :error-handler error-handler
                                    :invoker invoker)))
-    (lambda (fn invariant &key &allow-other-keys)
-      (dispatch-with dispatcher fn invariant))))
+    (values (lambda (fn invariant &key (priority :medium) ignore-invariant &allow-other-keys)
+              (dispatch-with dispatcher fn invariant priority ignore-invariant))
+            dispatcher)))
+
+
+(defun simple-dispatcher-instance-alive-p (simple-dispatcher-instance)
+  (with-slots (pool) simple-dispatcher-instance
+    (mt:pool-alive-p pool)))
 
 
 (defun free-simple-dispatcher (simple-dispatcher)
