@@ -1,4 +1,4 @@
-(in-package :simple-flow-dispatcher)
+(cl:in-package :simple-flow-dispatcher)
 
 
 (define-constant +cas-sleep+ (/ 1 internal-time-units-per-second))

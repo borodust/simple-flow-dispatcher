@@ -1,4 +1,4 @@
-(in-package :simple-flow-dispatcher)
+(cl:in-package :simple-flow-dispatcher)
 
 
 (declaim (special *dispatcher*))
