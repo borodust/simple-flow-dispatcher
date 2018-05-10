@@ -5,13 +5,13 @@
 
 
 (defclass tagged-queue ()
-  ((lock :initform (make-spin-lock))
+  ((lock :initform (mt:make-spin-lock))
    (queue-table :initform (make-hash-table :test 'eq))))
 
 
 (defun push-task (queue tag task)
   (with-slots (queue-table lock) queue
-    (with-spin-lock-held (lock)
+    (mt:with-spin-lock-held (lock)
       (let ((queue (gethash tag queue-table)))
         (if (null queue)
             (prog1 nil
@@ -22,7 +22,7 @@
 
 (defun pop-task (queue tag)
   (with-slots (queue-table lock) queue
-    (with-spin-lock-held (lock)
+    (mt:with-spin-lock-held (lock)
       (multiple-value-bind (value present-p) (gethash tag queue-table)
         (when present-p
           (if (null (rest value))
@@ -33,13 +33,13 @@
 
 (defun peek-task (queue tag)
   (with-slots (queue-table lock) queue
-    (with-spin-lock-held (lock)
+    (mt:with-spin-lock-held (lock)
       (first (gethash tag queue-table)))))
 
 
 (defun clear-tagged-queue (queue)
   (with-slots (queue-table lock) queue
-    (with-spin-lock-held (lock)
+    (mt:with-spin-lock-held (lock)
       (clrhash queue-table))))
 
 

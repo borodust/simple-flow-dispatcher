@@ -7,5 +7,4 @@
   :depends-on (alexandria cl-muth)
   :serial t
   :components ((:file "packages")
-               (:file "atomic")
                (:file "dispatcher")))
