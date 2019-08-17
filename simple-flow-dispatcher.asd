@@ -4,7 +4,7 @@
   :author "Pavel Korolev"
   :mailto "dev@borodust.org"
   :license "MIT"
-  :depends-on (alexandria cl-muth)
+  :depends-on (alexandria cl-muth bodge-queue)
   :serial t
   :components ((:file "packages")
                (:file "dispatcher")))

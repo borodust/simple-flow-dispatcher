@@ -4,6 +4,7 @@
 (declaim (special *dispatcher*))
 
 
+;; FIXME: make it generate less garbage
 (defclass tagged-queue ()
   ((lock :initform (mt:make-spin-lock))
    (queue-table :initform (make-hash-table :test 'eq))))
@@ -15,9 +16,11 @@
       (let ((queue (gethash tag queue-table)))
         (if (null queue)
             (prog1 nil
-              (push task (gethash tag queue-table)))
-            (prog1 (first queue)
-              (push task (cdr queue))))))))
+              (let ((queue (make-queue)))
+                (setf (gethash tag queue-table) queue)
+                (queue-push queue task)))
+            (prog1 (queue-peek queue)
+              (queue-push queue task)))))))
 
 
 (defun pop-task (queue tag)
@@ -25,16 +28,16 @@
     (mt:with-spin-lock-held (lock)
       (multiple-value-bind (value present-p) (gethash tag queue-table)
         (when present-p
-          (if (null (rest value))
-              (remhash tag queue-table)
-              (setf (gethash tag queue-table) (rest value)))
-          (first value))))))
+          (when (= (queue-length value) 1)
+            (remhash tag queue-table))
+          (queue-pop value))))))
 
 
 (defun peek-task (queue tag)
   (with-slots (queue-table lock) queue
     (mt:with-spin-lock-held (lock)
-      (first (gethash tag queue-table)))))
+      (when-let ((value (gethash tag queue-table)))
+        (queue-peek value)))))
 
 
 (defun clear-tagged-queue (queue)
@@ -72,11 +75,9 @@
                    (let ((*dispatcher* dispatcher))
                      (funcall invoker task))))
                (handle-tasks ()
-                 (loop for task = (peek-task tasks invariant)
-                    while task
-                    do (progn
-                         (handle-task task)
-                         (pop-task tasks invariant)))))
+                 (loop for task = (pop-task tasks invariant)
+                       while task
+                       do (handle-task task))))
         (if ignore-invariant
             (mt:push-to-pool pool fn priority)
             (unless (push-task tasks invariant fn)
@@ -100,7 +101,8 @@ never be executed concurrently."
                                    :threads threads
                                    :error-handler error-handler
                                    :invoker invoker)))
-    (values (lambda (fn invariant &key (priority :medium) ignore-invariant &allow-other-keys)
+    (values (lambda (fn invariant &key (priority :medium)
+                                    ignore-invariant &allow-other-keys)
               (dispatch-with dispatcher fn invariant priority ignore-invariant))
             dispatcher)))
 
